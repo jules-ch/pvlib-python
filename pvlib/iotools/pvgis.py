@@ -16,14 +16,15 @@ More detailed information about the API for TMY and hourly radiation are here:
 """
 import io
 import json
-from pathlib import Path
-import requests
-import pandas as pd
-from pvlib.iotools import read_epw, parse_epw
 import warnings
-from pvlib._deprecation import pvlibDeprecationWarning
+from pathlib import Path
 
-URL = 'https://re.jrc.ec.europa.eu/api/'
+import pandas as pd
+import requests
+from pvlib._deprecation import pvlibDeprecationWarning
+from pvlib.iotools import parse_epw, read_epw
+
+URL = 'https://re.jrc.ec.europa.eu/api/v5_2/'
 
 # Dictionary mapping PVGIS names to pvlib names
 PVGIS_VARIABLE_MAP = {
@@ -69,8 +70,14 @@ def get_pvgis_hourly(latitude, longitude, start=None, end=None,
     end: int or datetime like, default: None
         Last year of the radiation time series. Defaults to last year
         available.
-    raddatabase: str, default: None
-        Name of radiation database. Options depend on location, see [3]_.
+    raddatabase: str {None, 'PVGIS-SARAH2', 'PVGIS-SARAH', 'PVGIS-NSRDB', 'PVGIS-ERA5', `PVGIS-COSMO`}, optional
+        Name of the radiation database (DB):
+        "PVGIS-SARAH" for Europe, Africa and Asia or 
+        "PVGIS-NSRDB" for the Americas between 60°N and 20°S, 
+        "PVGIS-ERA5" and "PVGIS-COSMO" for Europe (including high-latitudes),
+        and "PVGIS-CMSAF" for Europe and Africa (will be deprecated). 
+        The default DBs are PVGIS-SARAH, PVGIS-NSRDB and PVGIS-ERA5 based on the chosen location.
+        See [5]_.
     components: bool, default: True
         Output solar radiation components (beam, diffuse, and reflected).
         Otherwise only global irradiance is returned.
@@ -107,9 +114,8 @@ def get_pvgis_hourly(latitude, longitude, start=None, end=None,
     optimalangles: bool, default: False
         Calculate the optimum tilt and azimuth angles. Ignored for two-axis
         tracking.
-    outputformat: str, default: 'json'
-        Must be in ``['json', 'csv']``. See PVGIS hourly data
-        documentation [2]_ for more info.
+    outputformat: str, {'json', 'csv'}
+        See PVGIS hourly data documentation [2]_ for more info.
     url: str, default: :const:`pvlib.iotools.pvgis.URL`
         Base url of PVGIS API. ``seriescalc`` is appended to get hourly data
         endpoint.
@@ -174,13 +180,15 @@ def get_pvgis_hourly(latitude, longitude, start=None, end=None,
 
     References
     ----------
-    .. [1] `PVGIS <https://ec.europa.eu/jrc/en/pvgis>`_
+    .. [1] `PVGIS <https://joint-research-centre.ec.europa.eu/pvgis-photovoltaic-geographical-information-system_en>`_
     .. [2] `PVGIS Hourly Radiation
-       <https://ec.europa.eu/jrc/en/PVGIS/tools/hourly-radiation>`_
+       <https://joint-research-centre.ec.europa.eu/pvgis-photovoltaic-geographical-information-system/pvgis-tools/hourly-radiation_en>`_
     .. [3] `PVGIS Non-interactive service
-       <https://ec.europa.eu/jrc/en/PVGIS/docs/noninteractive>`_
+       <https://joint-research-centre.ec.europa.eu/pvgis-photovoltaic-geographical-information-system/getting-started-pvgis/api-non-interactive-service_en>`_
     .. [4] `PVGIS horizon profile tool
-       <https://ec.europa.eu/jrc/en/PVGIS/tools/horizon>`_
+       <https://joint-research-centre.ec.europa.eu/pvgis-photovoltaic-geographical-information-system/pvgis-tools/horizon-profile_en>`_
+    .. [5] `PVGIS solar radiation databases 
+       <https://joint-research-centre.ec.europa.eu/pvgis-photovoltaic-geographical-information-system/getting-started-pvgis/pvgis-user-manual_en#ref-3-choice-of-solar-radiation-database>`_
     """  # noqa: E501
     # use requests to format the query string by passing params dictionary
     params = {'lat': latitude, 'lon': longitude, 'outputformat': outputformat,
@@ -202,6 +210,12 @@ def get_pvgis_hourly(latitude, longitude, start=None, end=None,
         params['endyear'] = end if isinstance(end, int) else end.year
     if peakpower is not None:
         params['peakpower'] = peakpower
+
+    if raddatabase == "PVGIS-CMSAF":
+        warnings.warn(
+            'PVGIS-CMSAF will be deprecated, consider using PVGIS-ERA5'
+            'instead.', pvlibDeprecationWarning
+        )
 
     # The url endpoint for hourly radiation is 'seriescalc'
     res = requests.get(url + 'seriescalc', params=params, timeout=timeout)

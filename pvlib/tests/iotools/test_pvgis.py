@@ -1,18 +1,19 @@
 """
 test the pvgis IO tools
 """
+import io
 import json
+
 import numpy as np
 import pandas as pd
-import io
 import pytest
 import requests
-from pvlib.iotools import get_pvgis_tmy, read_pvgis_tmy
-from pvlib.iotools import get_pvgis_hourly, read_pvgis_hourly
+from pvlib._deprecation import pvlibDeprecationWarning
+from pvlib.iotools import (get_pvgis_hourly, get_pvgis_tmy, read_pvgis_hourly,
+                           read_pvgis_tmy)
+
 from ..conftest import (DATA_DIR, RERUNS, RERUNS_DELAY, assert_frame_equal,
                         fail_on_pvlib_version)
-from pvlib._deprecation import pvlibDeprecationWarning
-
 
 # PVGIS Hourly tests
 # The test files are actual files from PVGIS where the data section have been
@@ -20,12 +21,12 @@ from pvlib._deprecation import pvlibDeprecationWarning
 testfile_radiation_csv = DATA_DIR / \
     'pvgis_hourly_Timeseries_45.000_8.000_SA_30deg_0deg_2016_2016.csv'
 testfile_pv_json = DATA_DIR / \
-    'pvgis_hourly_Timeseries_45.000_8.000_CM_10kWp_CIS_5_2a_2013_2014.json'
+    'pvgis_hourly_Timeseries_45.000_8.000_SA2_10kWp_CIS_5_2a_2013_2014.json'
 
 index_radiation_csv = \
-    pd.date_range('20160101 00:10', freq='1h', periods=14, tz='UTC')
+    pd.date_range('2016-01-01 00:10', freq='1h', periods=15, tz='UTC')
 index_pv_json = \
-    pd.date_range('2013-01-01 00:55', freq='1h', periods=10, tz='UTC')
+    pd.date_range('2013-01-01 00:10', freq='1h', periods=15, tz='UTC')
 
 columns_radiation_csv = [
     'Gb(i)', 'Gd(i)', 'Gr(i)', 'H_sun', 'T2m', 'WS10m', 'Int']
@@ -39,31 +40,42 @@ columns_pv_json_mapped = [
     'solar_elevation', 'temp_air', 'wind_speed', 'Int']
 
 data_radiation_csv = [
-    [0.0, 0.0, 0.0, 0.0, 3.44, 1.43, 0.0],
-    [0.0, 0.0, 0.0, 0.0, 2.94, 1.47, 0.0],
-    [0.0, 0.0, 0.0, 0.0, 2.43, 1.51, 0.0],
-    [0.0, 0.0, 0.0, 0.0, 1.93, 1.54, 0.0],
-    [0.0, 0.0, 0.0, 0.0, 2.03, 1.62, 0.0],
-    [0.0, 0.0, 0.0, 0.0, 2.14, 1.69, 0.0],
-    [0.0, 0.0, 0.0, 0.0, 2.25, 1.77, 0.0],
-    [0.0, 0.0, 0.0, 0.0, 3.06, 1.49, 0.0],
-    [26.71, 8.28, 0.21, 8.06, 3.87, 1.22, 1.0],
-    [14.69, 5.76, 0.16, 14.8, 4.67, 0.95, 1.0],
-    [2.19, 0.94, 0.03, 19.54, 5.73, 0.77, 1.0],
-    [2.11, 0.94, 0.03, 21.82, 6.79, 0.58, 1.0],
-    [4.25, 1.88, 0.05, 21.41, 7.84, 0.4, 1.0],
-    [0.0, 0.0, 0.0, 0.0, 7.43, 0.72, 0.0]]
+    [0.0, 0.0, 0.0, 0.0, 2.04, 0.76, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 1.73, 0.69, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 1.43, 0.62, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 1.32, 0.41, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 1.19, 0.28, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 0.77, 0.21, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 0.39, 0.28, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 0.72, 0.21, 0.0],
+    [26.71, 8.28, 0.21, 8.06, 0.95, 0.07, 1.0],
+    [14.69, 5.76, 0.16, 14.8, 2.37, 0.21, 1.0],
+    [2.19, 0.94, 0.03, 19.54, 4.13, 0.55, 1.0],
+    [2.11, 0.94, 0.03, 21.82, 5.64, 0.62, 1.0],
+    [4.25, 1.88, 0.05, 21.41, 6.58, 0.69, 1.0],
+    [0.0, 0.0, 0.0, 0.0, 6.98, 0.76, 0.0],
+    [197.71, 103.37, 2.04, 12.93, 7.1, 0.97, 1.0]
+]
+
 data_pv_json = [
-    [0.0, 0.0, 0.0, 0.0, 0.0, 3.01, 1.23, 0.0],
-    [0.0, 0.0, 0.0, 0.0, 0.0, 2.22, 1.46, 0.0],
-    [0.0, 0.0, 0.0, 0.0, 0.0, 1.43, 1.7, 0.0],
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.64, 1.93, 0.0],
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.77, 1.8, 0.0],
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.91, 1.66, 0.0],
-    [0.0, 0.0, 0.0, 0.0, 0.0, 1.05, 1.53, 0.0],
-    [3464.5, 270.35, 91.27, 6.09, 6.12, 1.92, 1.44, 0.0],
-    [1586.9, 80.76, 83.95, 9.04, 13.28, 2.79, 1.36, 0.0],
-    [713.3, 5.18, 70.57, 7.31, 18.56, 3.66, 1.27, 0.0]]
+    [0.0, 0.0, 0.0, 0.0, 0.0, -0.97, 1.52, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 0.0, -1.06, 1.45, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 0.0, -1.03, 1.45, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 0.0, -0.48, 1.31, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 0.0, -0.09, 1.24, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 0.0, -0.38, 1.17, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.29, 1.03, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.62, 0.0],
+    [1187.2, 71.36, 52.47, 5.76, 8.06, 0.97, 0.97, 0.0],
+    [3950.1, 262.36, 147.52, 13.4, 14.8, 1.89, 0.69, 0.0],
+    [1604.4, 50.84, 115.92, 11.25, 19.54, 3.35, 0.55, 0.0],
+    [3467.2, 182.91, 179.09, 15.64, 21.82, 4.23, 0.34, 0.0],
+    [7640.4, 663.04, 179.49, 21.78, 21.41, 4.98, 0.28, 0.0],
+    [3373.9, 197.14, 156.68, 14.4, 18.33, 5.07, 0.28, 0.0],
+    [1016.4, 40.23, 68.02, 7.92, 12.93, 4.84, 0.34, 0.0]
+]
+
+
 
 inputs_radiation_csv = {'latitude': 45.0, 'longitude': 8.0, 'elevation': 250.0,
                         'radiation_database': 'PVGIS-SARAH',
@@ -80,7 +92,7 @@ metadata_radiation_csv = {
 
 inputs_pv_json = {
     'location': {'latitude': 45.0, 'longitude': 8.0, 'elevation': 250.0},
-    'meteo_data': {'radiation_db': 'PVGIS-CMSAF', 'meteo_db': 'ERA-Interim',
+    'meteo_data': {'radiation_db': 'PVGIS-SARAH2', 'meteo_db': 'ERA-Interim',
                    'year_min': 2013, 'year_max': 2014, 'use_horizon': True,
                    'horizon_db': None, 'horizon_data': 'DEM-calculated'},
     'mounting_system': {'two_axis': {
@@ -188,7 +200,7 @@ def test_read_pvgis_hourly(testfile, expected_name, metadata_exp,
     out, inputs, metadata = read_pvgis_hourly(
         testfile, map_variables=map_variables, pvgis_format=pvgis_format)
     # Assert whether dataframe, metadata, and inputs are as expected
-    assert_frame_equal(out, expected)
+    assert_frame_equal(out.head(15), expected)
     assert inputs == inputs_exp
     assert metadata == metadata_exp
 
@@ -211,16 +223,16 @@ args_radiation_csv = {
     'usehorizon': False, 'userhorizon': None, 'raddatabase': 'PVGIS-SARAH',
     'start': 2016, 'end': 2016, 'pvcalculation': False, 'components': True}
 
-url_hourly_radiation_csv = 'https://re.jrc.ec.europa.eu/api/seriescalc?lat=45&lon=8&outputformat=csv&angle=30&aspect=0&usehorizon=0&pvtechchoice=crystSi&mountingplace=free&trackingtype=0&components=1&raddatabase=PVGIS-SARAH&startyear=2016&endyear=2016'  # noqa: E501
+url_hourly_radiation_csv = 'https://re.jrc.ec.europa.eu/api/v5_2/seriescalc?lat=45&lon=8&outputformat=csv&angle=30&aspect=0&usehorizon=0&pvtechchoice=crystSi&mountingplace=free&trackingtype=0&components=1&raddatabase=PVGIS-SARAH&startyear=2016&endyear=2016'  # noqa: E501
 
 args_pv_json = {
     'surface_tilt': 30, 'surface_azimuth': 0, 'outputformat': 'json',
-    'usehorizon': True, 'userhorizon': None, 'raddatabase': 'PVGIS-CMSAF',
+    'usehorizon': True, 'userhorizon': None, 'raddatabase': 'PVGIS-SARAH2',
     'start': pd.Timestamp(2013, 1, 1), 'end': pd.Timestamp(2014, 5, 1),
     'pvcalculation': True, 'peakpower': 10, 'pvtechchoice': 'CIS', 'loss': 5,
     'trackingtype': 2, 'optimalangles': True, 'components': True}
 
-url_pv_json = 'https://re.jrc.ec.europa.eu/api/seriescalc?lat=45&lon=8&outputformat=json&angle=30&aspect=0&pvtechchoice=CIS&mountingplace=free&trackingtype=2&components=1&usehorizon=1&raddatabase=PVGIS-CMSAF&startyear=2013&endyear=2014&pvcalculation=1&peakpower=10&loss=5&optimalangles=1'  # noqa: E501
+url_pv_json = 'https://re.jrc.ec.europa.eu/api/v5_2/seriescalc?lat=45&lon=8&outputformat=json&angle=30&aspect=0&pvtechchoice=CIS&mountingplace=free&trackingtype=2&components=1&usehorizon=1&raddatabase=PVGIS-SARAH2&startyear=2013&endyear=2014&pvcalculation=1&peakpower=10&loss=5&optimalangles=1'  # noqa: E501
 
 
 @pytest.mark.parametrize('testfile,expected_name,args,map_variables,url_test', [  # noqa: E501
@@ -246,8 +258,9 @@ def test_get_pvgis_hourly(requests_mock, testfile, expected_name, args,
         latitude=45, longitude=8, map_variables=map_variables, **args)
     # Get expected dataframe from fixture
     expected = request.getfixturevalue(expected_name)
+
     # Compare out and expected dataframes
-    assert_frame_equal(out, expected)
+    assert_frame_equal(out.head(15), expected)
 
 
 def test_get_pvgis_hourly_bad_status_code(requests_mock):
@@ -262,7 +275,7 @@ def test_get_pvgis_hourly_bad_status_code(requests_mock):
         get_pvgis_hourly(latitude=45, longitude=8, **args_pv_json)
 
 
-url_bad_outputformat = 'https://re.jrc.ec.europa.eu/api/seriescalc?lat=45&lon=8&outputformat=basic&angle=0&aspect=0&pvcalculation=0&pvtechchoice=crystSi&mountingplace=free&trackingtype=0&components=1&usehorizon=1&optimalangles=0&optimalinclination=0&loss=0'  # noqa: E501
+url_bad_outputformat = 'https://re.jrc.ec.europa.eu/api/v5_2/seriescalc?lat=45&lon=8&outputformat=basic&angle=0&aspect=0&pvcalculation=0&pvtechchoice=crystSi&mountingplace=free&trackingtype=0&components=1&usehorizon=1&optimalangles=0&optimalinclination=0&loss=0'  # noqa: E501
 
 
 def test_get_pvgis_hourly_bad_outputformat(requests_mock):
@@ -273,7 +286,7 @@ def test_get_pvgis_hourly_bad_outputformat(requests_mock):
         get_pvgis_hourly(latitude=45, longitude=8, outputformat='basic')
 
 
-url_additional_inputs = 'https://re.jrc.ec.europa.eu/api/seriescalc?lat=55.6814&lon=12.5758&outputformat=csv&angle=0&aspect=0&pvcalculation=1&pvtechchoice=crystSi&mountingplace=free&trackingtype=0&components=1&usehorizon=1&optimalangles=1&optimalinclination=0&loss=2&userhorizon=10%2C15%2C20%2C10&peakpower=5'  # noqa: E501
+url_additional_inputs = 'https://re.jrc.ec.europa.eu/api/v5_2/seriescalc?lat=55.6814&lon=12.5758&outputformat=csv&angle=0&aspect=0&pvcalculation=1&pvtechchoice=crystSi&mountingplace=free&trackingtype=0&components=1&usehorizon=1&optimalangles=1&optimalinclination=0&loss=2&userhorizon=10%2C15%2C20%2C10&peakpower=5'  # noqa: E501
 
 
 def test_get_pvgis_hourly_additional_inputs(requests_mock):

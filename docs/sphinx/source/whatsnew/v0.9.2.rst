@@ -8,6 +8,8 @@ Deprecations
 
 Enhancements
 ~~~~~~~~~~~~
+* Support `PVGIS API v5.2 <https://joint-research-centre.ec.europa.eu/pvgis-photovoltaic-geographical-information-system/pvgis-releases/pvgis-52_en>`_.
+  Change default endpoint to v5.2 and warn for PVGIS-CMSAF database future deprecation.
 
 Bug fixes
 ~~~~~~~~~
@@ -22,6 +24,7 @@ Bug fixes
 
 Testing
 ~~~~~~~
+* Update mocked pvgis response to pvgis 5.2 response.
 
 Documentation
 ~~~~~~~~~~~~~
@@ -40,3 +43,4 @@ Contributors
 * Naman Priyadarshi (:ghuser:`Naman-Priyadarshi`)
 * Chencheng Luo (:ghuser:`roger-lcc`)
 * Prajwal Borkar (:ghuser:`PrajwalBorkar`) 
+* Jules Chéron (:ghuser:`jules-ch`)
